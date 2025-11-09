@@ -1,6 +1,6 @@
 # Telemetry Decoder: Modular C++ System for Drone Telemetry
 
-A modular C++ telemetry decoding system that reads fixed-length binary packets from a drone or spacecraft, 
+A modular C++ telemetry decoding system that reads fixed-length binary packets from an ISR drone, 
 validates each with a CRC-8 checksum, parses the decoded fields (timestamp, GPS, altitude, temperature, flags), 
 and outputs the data to both the console and a CSV log file.
 
