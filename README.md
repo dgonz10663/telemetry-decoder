@@ -13,6 +13,11 @@ and outputs the data to both the console and a CSV log file. Designed for aerosp
 - CLI flags: `--input`, `--output`, `--verbose`, 
 - Modular, testable architecture
 
+# Future implementation
+Real time serial or UDP input
+JSON or SQLite logging
+Cross-platform GUI for live telemetry
+
 ---
 
 # Build and Run (MSYS2 MinGW64 / Linux / WSL)
@@ -27,7 +32,3 @@ make
 ./bin/telemetry-decoder --input data/sample_packets.bin --output outputs/decoded_log.csv --verbose # Decode binary file and write CSV
 make test # Run unit tests
 
-# Future implementation
-Real time serial or UDP input
-JSON or SQLite logging
-Cross-platform GUI for live telemetry
