@@ -8,6 +8,7 @@
 #include "CRC8.hpp"
 #include "TelemetryPacket.hpp"
 #include "TelemetryParser.hpp"
+#include "CSVLogger.hpp"
 
 // Prints program usage instructions
 static void print_help() {
@@ -16,7 +17,7 @@ static void print_help() {
         telemetry_decoder --help
         telemetry_decoder --crc-selftest
         telemetry_decoder --gen-sample <path> <N>
-        telemetry_decoder --input <file> [--verbose]
+        telemetry_decoder --input <file> [--output <csv>] [--append] [--verbose]
 
     Notes:
         --gen-sample writes N example packets to <path>.
@@ -78,58 +79,77 @@ static bool write_sample_packets(const std::string& path, int N) {
     return true;
 }
 
-static int decode_first_packet(const std::string& path, bool verbose) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        std::cerr << "Error: cannot open " << path << " for reading\n";
-        return 2;
-    }
+static int decode_all_packets(const std::string& inPath,
+                              const std::string& outCSV,
+                              bool append_csv,          
+                              bool verbose) 
+{
+    std::ifstream in(inPath, std::ios::binary);
+    if (!in) { std::cerr << "Error: cannot open " << inPath << " for reading\n"; return 2; }
 
-    // Read first 32 bytes
+    CSVLogger csv(outCSV, append_csv);
+    if (!csv.ok()) { std::cerr << "Error: cannot open CSV " << outCSV << "\n"; return 2; }
+
     std::vector<uint8_t> buf(pkt::kPacketLen);
-    in.read(reinterpret_cast<char*>(buf.data()), pkt::kPacketLen);
-    std::size_t got = static_cast<std::size_t>(in.gcount());
-    if (got < pkt::kPacketLen) {
-        std::cerr << "Error: short read (" << got << " bytes). Need 32.\n";
-        return static_cast<int>(parser::ParseResult::ShortRead);
+    std::size_t total = 0, good = 0, bad_crc = 0, short_reads = 0;
+
+    while (true) {
+        in.read(reinterpret_cast<char*>(buf.data()), pkt::kPacketLen);
+        std::size_t got = static_cast<std::size_t>(in.gcount());
+        if (got == 0) break; // EOF
+        if (got < pkt::kPacketLen) {
+            std::cerr << "Short packet at tail: " << got << " bytes\n";
+            ++short_reads;
+            break;
+        }
+
+        ++total;
+
+        // Split payload and CRC
+        const uint8_t* payload = buf.data();
+        uint8_t stored_crc = buf[pkt::kPayloadLen];
+        uint8_t calc_crc   = crc8::compute(payload, pkt::kPayloadLen);
+
+        if (verbose) {
+            std::cout << "[pkt " << total << "] stored=0x" << std::hex << (int)stored_crc
+                << " calc=0x" << (int)calc_crc << std::dec << "\n"; 
+        }
+        
+        if (stored_crc != calc_crc) {
+            ++bad_crc;
+            std::cerr << "CRC mismatch, skipping\n";
+            continue;
+        }
+
+        pkt::Telemetry t{};
+        if (!parser::decode_payload_le(payload, t)) {
+            if (verbose) std::cout << "Decode failed, skipping\n";
+            continue;
+        }
+        
+        // Console one-line summary
+        std::cout << "ts=" << t.timestamp_ms
+                  << " lat=" << t.latitude
+                  << " lon=" << t.longitude
+                  << " alt=" << t.altitude_m
+                  << " temp=" << t.temperature_c
+                  << " batt=" << (int)t.battery_pct
+                  << " flags=" << (int)t.status_flags
+                  << "\n";
+
+        // CSV row
+        csv.write_row(t);
+        ++good;
     }
 
-    // Split payload and CRC
-    const uint8_t* payload = buf.data();
-    uint8_t stored_crc = buf[pkt::kPayloadLen];
-    uint8_t calc_crc   = crc8::compute(payload, pkt::kPayloadLen);
-
-    if (verbose) {
-        std::cout << "Stored CRC=0x" << std::hex << (int)stored_crc
-                  << " Calc CRC=0x"  << (int)calc_crc << std::dec << "\n";
-    }
-
-    if (stored_crc != calc_crc) {
-        std::cerr << "CRC mismatch.\n";
-        return static_cast<int>(parser::ParseResult::CrcMismatch);
-    }
-
-    pkt::Telemetry t{};
-    if (!parser::decode_payload_le(payload, t)) {
-        std::cerr << "Decode failed.\n";
-        return 3;
-    }
-
-    // Minimal pretty print
-    std::cout << "Decoded packet:\n";
-    std::cout << "  timestamp_ms : " << t.timestamp_ms << "\n";
-    std::cout << "  lat, lon     : " << t.latitude << ", " << t.longitude << "\n";
-    std::cout << "  altitude_m   : " << t.altitude_m << "\n";
-    std::cout << "  temperature_c: " << t.temperature_c << "\n";
-    std::cout << "  sensor_id    : " << t.sensor_id << "\n";
-    std::cout << "  battery_pct  : " << (int)t.battery_pct << "\n";
-    std::cout << "  flags        : "
-              << (pkt::system_ok(t.status_flags) ? "SYSTEM_OK " : "")
-              << (pkt::gps_lock(t.status_flags) ? "GPS_LOCK "   : "")
-              << (pkt::payload_active(t.status_flags) ? "PAYLOAD_ACTIVE " : "")
+    std::cout << "Summary: total=" << total
+              << " good=" << good
+              << " bad_crc=" << bad_crc
+              << " short_reads=" << short_reads
               << "\n";
 
-    return static_cast<int>(parser::ParseResult::Ok);
+    // Exit code: 0 if we decoded at least one good packet, else non-zero
+    return (good > 0) ? 0 : 1;
 
 }
 
@@ -155,17 +175,21 @@ int main(int argc, char** argv) {
 
 
     if (arg1 == "--input") {
-        if (argc < 3) { std::cerr << "Usage: --input <file> [--verbose]\n"; return 1; }
+        if (argc < 3) { std::cerr << "Usage: --input <file> [--output <csv>] [--append] [--verbose]\n"; return 1; }
         std::string inPath = argv[2];
+        std::string outCSV = "outputs/decoded_log.csv";
         bool verbose = false;
+        bool append = false;
+
         for (int i = 3; i < argc; ++i) {
-            if (std::string(argv[i]) == "--verbose") verbose = true;
+            std::string arg = argv[i];
+            if (arg == "--verbose") verbose = true;
+            else if (arg == "--append") append = true;
+            else if (arg == "--output" && i + 1 < argc) { outCSV = argv[++i]; }
+            else { std::cerr << "Unknown or incomplete option: " << arg << "\n"; return 1; }
         }
-        return decode_first_packet(inPath, verbose);
+        return decode_all_packets(inPath, outCSV, append, verbose);
     }
 
-    // Unknown args → fallback
-    print_help();
     return 0;
-
 }

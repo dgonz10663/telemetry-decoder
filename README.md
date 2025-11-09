@@ -24,4 +24,3 @@ make run        # quick --help check
 ./bin/telemetry-decoder --help
 ./bin/telemetry-decoder --input data/sample_packets.bin --output outputs/decoded_log.csv
 
-

@@ -11,7 +11,7 @@ TARGET   := $(BINDIR)/telemetry-decoder
 SRC      := $(wildcard $(SRCDIR)/*.cpp)
 OBJ      := $(patsubst $(SRCDIR)/%.cpp, $(SRCDIR)/%.o, $(SRC))
 
-.PHONY: all clean run
+.PHONY: all clean run test
 
 # Default target
 all: $(TARGET)
@@ -28,24 +28,16 @@ $(SRCDIR)/%.o: $(SRCDIR)/%.cpp
 $(BINDIR):
 	mkdir -p $(BINDIR)
 
-# Remove build artifacts
-clean:
-	rm -f $(SRCDIR)/*.o $(TARGET)
-
 # Quick test command
 run: $(TARGET)
 	./$(TARGET) --help
 
 
+test:
+	$(CXX) $(CXXFLAGS) -Iinclude -o bin/tests tests/test_main.cpp \
+	src/CRC8.cpp src/TelemetryParser.cpp src/CSVLogger.cpp
+	./bin/tests
 
-# Build & run CRC unit tests
-TESTBIN := bin/test_crc8
-TESTSRC := tests/test_crc8.cpp
-
-.PHONY: test
-test: $(TESTBIN)
-	./$(TESTBIN)
-
-$(TESTBIN): $(TESTSRC) src/CRC8.cpp | $(BINDIR)
-	$(CXX) $(CXXFLAGS) -o $@ $(TESTSRC) src/CRC8.cpp
+clean:
+	rm -f $(SRCDIR)/*.o $(TARGET) $(BINDIR)/tests
 

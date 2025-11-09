@@ -1,0 +1,2 @@
+timestamp_ms,latitude,longitude,altitude_m,temperature_c,sensor_id,battery_pct,status_flags
+1,2.200000,3.300000,4.40,5.50,6,7,3
