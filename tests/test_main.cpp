@@ -6,6 +6,14 @@
 #include "../include/TelemetryPacket.hpp"
 #include "../include/CSVLogger.hpp"
 
+/* 
+    test_main.cpp
+    Minimal test suite verifying CRC8, TelemetryParser, and CSVLogger behavior.
+    Designed to validate internal modules independently of main runtime logic.
+*/
+
+
+
 using namespace std;
 
 static void test_crc8() {

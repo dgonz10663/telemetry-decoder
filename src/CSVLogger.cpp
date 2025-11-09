@@ -2,6 +2,12 @@
 #include <iomanip>
 #include <filesystem>
 
+/*
+    CSVLogger.cpp
+    Handles creation and appending of decoded telemetry records to a CSV file.
+    Automatically manages headers and enforces consistent formatting.
+*/
+
 CSVLogger::CSVLogger(const std::string& path, bool append) {
     using std::ios;
     auto openmode = ios::binary | ios::out | (append ? ios::app : ios::trunc);

@@ -1,6 +1,13 @@
 #include "TelemetryParser.hpp"
 #include <cstring>   // memcpy, standard safe way to parse binary in cpp
 
+/* 
+    TelemetryParser.cpp
+    Converts 31-byte binary payloads into structured Telemetry objects.
+    All reads assume little-endian byte order for multi-byte fields.
+*/
+
+
 namespace parser {
     static void read_u64_le(const uint8_t* p, uint64_t& v) { std::memcpy(&v, p, 8); }
     static void read_u16_le(const uint8_t* p, uint16_t& v) { std::memcpy(&v, p, 2); }

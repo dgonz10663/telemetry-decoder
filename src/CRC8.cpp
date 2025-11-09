@@ -1,5 +1,10 @@
 #include "CRC8.hpp"
 
+/*
+    CRC8.cpp
+    Implements an 9-bit CRC checksum for telemetry packet integrity verification
+    Uses polynomial 0x07 with initial value 0x00
+*/
 
 namespace crc8 {
 
